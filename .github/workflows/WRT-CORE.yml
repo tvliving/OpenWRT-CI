@@ -80,33 +80,44 @@ jobs:
         run: |
           set -uo pipefail
 
-          # 1) 先释放 runner 上无用的大目录（不碰 runner 自身运行时，避免它自己把自己杀掉）
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
-                      /usr/local/lib/node_modules /usr/lib/jvm \
-                      /usr/local/share/chromium /opt/microsoft 2>/dev/null || true
-          sudo docker image prune -af 2>/dev/null || true
+          # 注意：刻意不做 full-upgrade / autoremove / purge —— 升级系统包会重启
+          # runner 依赖的服务（dbus/systemd/网络栈），runner 一断线整个 job 就是
+          # "The hosted runner lost communication with the server"，与固件编译无关。
+          # 也不做「删 toolcache/dotnet/node_modules」那套大扫除：镜像根盘 145G，
+          # 完整构建后仍剩 55G+，删目录只会让这一步从 40 秒变成十几分钟。
+
+          # 1) 4G swap：make -j 编内核的瞬时内存峰值兜底。
+          #    OOM 杀掉 Runner.Listener 的表现同样是 "lost communication"。
+          echo "::group::swap"
           sudo swapoff /swapfile 2>/dev/null || true
           sudo rm -f /swapfile 2>/dev/null || true
+          if timeout 120 sudo fallocate -l 4G /swapfile 2>/dev/null || \
+             timeout 300 sudo dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none 2>/dev/null; then
+            sudo chmod 600 /swapfile
+            if sudo mkswap -q /swapfile >/dev/null 2>&1 && sudo swapon /swapfile; then
+              echo "swap 4G 已启用"
+            else
+              echo "::warning::swap 启用失败，继续（不阻塞编译）"
+            fi
+          else
+            echo "::warning::swapfile 创建失败，继续（不阻塞编译）"
+          fi
+          echo "::endgroup::"
 
-          # 2) 4G swap：make -j 编内核时的瞬时内存峰值兜底，避免 OOM 直接把 runner 进程打死
-          #    （OOM 杀掉 Runner.Listener 的表现就是 "The hosted runner lost communication with the server"）
-          sudo fallocate -l 4G /swapfile 2>/dev/null || \
-            sudo dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none
-          sudo chmod 600 /swapfile && sudo mkswap -q /swapfile >/dev/null && sudo swapon /swapfile
-
-          # 3) 只装编译必需的包。刻意不做 full-upgrade / autoremove：
-          #    升级系统包会重启 runner 依赖的服务（dbus/systemd/网络栈），
-          #    runner 一断线整个 job 直接 "lost communication"，且与固件编译毫无关系。
-          for i in 1 2 3; do
-            if sudo apt-get -yqq update; then break; fi
-            echo "::warning::apt-get update 第 $i 次失败，10 秒后重试"
-            sleep 10
-          done
+          # 2) 只装编译必需的包；每条命令都带超时，避免任何一步把 job 挂死
+          echo "::group::apt"
+          export DEBIAN_FRONTEND=noninteractive
+          export NEEDRESTART_MODE=a
+          if timeout 420 sudo apt-get -yqq -o Acquire::Retries=3 update; then
+            echo "apt update ok"
+          else
+            echo "::warning::apt-get update 超时或失败，继续尝试安装（镜像内已有软件包索引）"
+          fi
 
           ok=0
           for i in 1 2 3; do
-            if sudo apt-get install -y --no-install-recommends \
+            if timeout 1500 sudo apt-get install -y --no-install-recommends \
+              -o Acquire::Retries=3 -o Dpkg::Options::=--force-confdef \
               bc bison build-essential bzip2 ca-certificates ccache clang \
               cmake cpio curl device-tree-compiler dos2unix file flex \
               g++-multilib gawk gcc-multilib genisoimage gettext git jq \
@@ -114,15 +125,16 @@ jobs:
               llvm ninja-build patch perl pkgconf python3 python3-cryptography \
               python3-dev python3-packaging python3-pyelftools python3-setuptools qemu-utils rsync swig \
               unzip wget xz-utils zlib1g-dev zstd; then ok=1; break; fi
-            echo "::warning::apt-get install 第 $i 次失败，修依赖后重试"
-            sudo apt-get -yqq --fix-broken install || true
+            echo "::warning::apt-get install 第 $i 次失败（超时 25 分钟），修依赖后重试"
+            timeout 300 sudo apt-get -yqq --fix-broken install || true
             sleep 15
           done
           if [ "$ok" != "1" ]; then
             echo "::error::编译依赖安装连续 3 次失败"
             exit 1
           fi
-          sudo apt-get -yqq clean
+          timeout 120 sudo apt-get -yqq clean || true
+          echo "::endgroup::"
 
           sudo timedatectl set-timezone "Asia/Shanghai" || true
 
