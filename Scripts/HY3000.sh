@@ -20,6 +20,28 @@ curl -sSLf --retry 3 "$LEDE_RAW/target/linux/mediatek/dts/mt7981b-philips-hy3000
 	-o target/linux/mediatek/dts/mt7981b-philips-hy3000.dts
 test -s target/linux/mediatek/dts/mt7981b-philips-hy3000.dts \
 	|| { echo "::error::HY3000 DTS 下载失败"; exit 1; }
+# owrt 内核 6.18 的 dtsi 拆分为 mt7981a/mt7981b（lede 是单文件 mt7981.dtsi），
+# 且 owrt 的 mt7981b.dtsi 不含 mmc0 引脚定义（owrt 自家 eMMC 机型都在设备 dts 里定义）
+sed -i 's/#include "mt7981.dtsi"/#include "mt7981b.dtsi"/' \
+	target/linux/mediatek/dts/mt7981b-philips-hy3000.dts
+cat >> target/linux/mediatek/dts/mt7981b-philips-hy3000.dts <<'EOF'
+
+&pio {
+	mmc0_pins_default: mmc0-pins-default {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+
+	mmc0_pins_uhs: mmc0-pins-uhs {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+};
+EOF
 
 #2) filogic.mk 机型块（文件尾为纯 device define 区，直接 append）
 cat >> target/linux/mediatek/image/filogic.mk <<'EOF'
