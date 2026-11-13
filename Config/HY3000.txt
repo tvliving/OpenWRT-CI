@@ -1,0 +1,17 @@
+#设备平台
+CONFIG_TARGET_mediatek=y
+CONFIG_TARGET_mediatek_filogic=y
+#设备（飞利浦 HY3000，MT7981B + MT7531 + 2.5G 光口 + eMMC）
+#设备支持不在 VIKINGYFY/immortalwrt owrt 分支里，
+#由 Scripts/HY3000.sh 在编译时从 tvliving/lede 注入（DTS/机型块/网络/升级脚本）
+CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_philips_hy3000=y
+#稳定 WiFi 方案：mt76 驱动/固件全量选入（与 lede HY3000 同方案）
+CONFIG_PACKAGE_kmod-mt7915e=y
+CONFIG_PACKAGE_kmod-mt7981-firmware=y
+CONFIG_PACKAGE_mt7981-wo-firmware=y
+CONFIG_PACKAGE_wpad-openssl=y
+CONFIG_PACKAGE_wireless-regdb=y
+CONFIG_PACKAGE_iwinfo=y
+#eMMC 文件系统工具
+CONFIG_PACKAGE_mkf2fs=y
+CONFIG_PACKAGE_f2fsck=y
