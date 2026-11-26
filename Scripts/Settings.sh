@@ -78,8 +78,10 @@ fi
 #net/bridge/netfilter/nf_conntrack_bridge.ko 也打进去，而内核 default install 强制装
 #kmod-nf-conntrack-bridge（同一个 ko），firmware install 阶段 check_data_file_clashes 让
 #package/install Error 255。kmod-nf-conntrack-bridge 是内核自动带入、.config 关不掉，
-#所以改源码 netfilter.mk：nft-bridge 的 FILES/AUTOLOAD 只保留 nft_bridge.ko，
-#把重复的 conntrack_bridge.ko 剔除（该 ko 由 kmod-nf-conntrack-bridge 正常提供）。
+#所以改源码 netfilter.mk：在 nft-bridge 的 FILES/AUTOLOAD 里用 filter-out 把
+#bridge/netfilter/nf_conntrack_bridge 从 $(NFT_BRIDGE-m) 去掉，其余 ko 与路径保持原样
+#（不能硬编码 nft_bridge.ko 路径——该内核里它不在 net/bridge/netfilter/ 下）。
+#该 ko 仍由 kmod-nf-conntrack-bridge 正常提供，bridge 表功能不受影响。
 NFMK="./package/kernel/linux/modules/netfilter.mk"
 if grep -q 'KernelPackage/nf-conntrack-bridge' "$NFMK" 2>/dev/null && grep -q 'define KernelPackage/nft-bridge' "$NFMK" 2>/dev/null; then
 	python3 - "$NFMK" <<'PY'
@@ -91,16 +93,16 @@ if not m:
     print('kernel clash fix: nft-bridge define 未找到，跳过')
     sys.exit(0)
 blk = m.group(1)
-new = re.sub(r'FILES:=\$\(foreach mod,\$\(NFT_BRIDGE-m\),\$\(LINUX_DIR\)/net/\$\(mod\)\.ko\)',
-             'FILES:=$(LINUX_DIR)/net/bridge/netfilter/nft_bridge.ko', blk)
-new = re.sub(r'AUTOLOAD:=\$\(call AutoProbe,\$\(notdir \$\(NFT_BRIDGE-m\)\)\)',
-             'AUTOLOAD:=$(call AutoProbe,nft_bridge)', new)
-if 'net/bridge/netfilter/nft_bridge.ko' in new:
-    s = s[:m.start()] + new + s[m.end():]
+orig = blk
+# 用 filter-out 剔除重复的 conntrack_bridge 模块，路径仍由 $(NFT_BRIDGE-m) 给出
+blk = blk.replace('$(NFT_BRIDGE-m)',
+                  '$(filter-out bridge/netfilter/nf_conntrack_bridge,$(NFT_BRIDGE-m))')
+if blk != orig:
+    s = s[:m.start()] + blk + s[m.end():]
     io.open(p, 'w', encoding='utf-8', newline='\n').write(s)
-    print('kernel clash fix: kmod-nft-bridge 只保留 nft_bridge.ko（剔除重复 conntrack_bridge.ko）')
+    print('kernel clash fix: kmod-nft-bridge 用 filter-out 剔除重复 conntrack_bridge.ko')
 else:
-    print('kernel clash fix: FILES 格式不匹配，跳过')
+    print('kernel clash fix: 未匹配到 $(NFT_BRIDGE-m)，跳过')
 PY
 fi
 
