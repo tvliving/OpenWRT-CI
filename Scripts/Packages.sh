@@ -92,6 +92,16 @@ UPDATE_PACKAGE "mt5700m" "LianXia233/luci-app-mt5700m" "main"
 UPDATE_PACKAGE "netmonitor" "LianXia233/luci-app-netmonitor" "main"
 UPDATE_PACKAGE "qmodem-generic" "LianXia233/luci-app-qmodem-generic" "main"
 
+#iStore 软件中心（ipk 市场）
+#linkease/istore 的包在 luci/ 子目录下（luci/luci-app-store 等），
+#OpenWrt 只扫描 ./package/<层>/<层>/Makefile，所以克隆后要提到 ./package/ 根下。
+UPDATE_PACKAGE "istore" "linkease/istore" "main"
+if [ -d ./package/istore/luci ]; then
+	cp -rf ./package/istore/luci/. ./package/
+	rm -rf ./package/istore
+	echo "iStore packages: $(ls -d ./package/luci-app-store ./package/taskd ./package/luci-lib-taskd ./package/luci-lib-xterm 2>/dev/null | tr '\n' ' ')"
+fi
+
 #更新软件包版本
 UPDATE_VERSION() {
 	local PKG_NAME=$1

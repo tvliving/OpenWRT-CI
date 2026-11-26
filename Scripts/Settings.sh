@@ -36,6 +36,33 @@ echo "CONFIG_PACKAGE_luci-theme-$WRT_THEME=y" >> ./.config
 echo "CONFIG_PACKAGE_luci-app-$WRT_THEME=y" >> ./.config
 echo "CONFIG_PACKAGE_luci-app-$WRT_THEME-config=y" >> ./.config
 
+#包管理器：强制 ipk（opkg）
+#源码（owrt / 25.12 系）的 config/Config-build.in 里 CONFIG_USE_APK 默认 y，产出 .apk；
+#统一关掉后整棵构建按 ipk 打包，主题包 luci-theme-* 也随之是 .ipk。
+if grep -q 'config USE_APK' ./config/Config-build.in 2>/dev/null; then
+	echo "# CONFIG_USE_APK is not set" >> ./.config
+	echo "package manager: ipk (CONFIG_USE_APK disabled)"
+fi
+
+#iStore 软件中心（ipk 市场）：包源码由 Scripts/Packages.sh 从 linkease/istore 拉取
+#依赖链：luci-app-store -> luci-lib-taskd -> luci-lib-xterm + taskd
+echo "CONFIG_PACKAGE_luci-app-store=y" >> ./.config
+echo "CONFIG_PACKAGE_luci-lib-taskd=y" >> ./.config
+echo "CONFIG_PACKAGE_luci-lib-xterm=y" >> ./.config
+echo "CONFIG_PACKAGE_taskd=y" >> ./.config
+
+#中文：LuCI 简体中文包 + 强制默认 zh_cn（而不是 auto 跟随浏览器）
+echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> ./.config
+mkdir -p ./files/etc/uci-defaults
+cat > ./files/etc/uci-defaults/99-zh-cn <<'EOF'
+#!/bin/sh
+#强制 LuCI 默认语言为简体中文（覆盖 auto 探测）
+uci -q set luci.main.lang='zh_cn'
+uci -q commit luci
+exit 0
+EOF
+chmod 755 ./files/etc/uci-defaults/99-zh-cn
+
 #引入私有扩展配置
 if [ -f "$GITHUB_WORKSPACE/Config/PRIVATE.txt" ]; then
 	echo "Applying private configurations from PRIVATE.txt..."

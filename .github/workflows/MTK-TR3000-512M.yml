@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MIT
+
+#CI项目：Cudy TR3000 512MB 硬改版（MT7981B + 512MB NAND + USB3）
+#设备支持由 Scripts/TR3000-512M.sh 编译时注入（源码只有 128MB / 256MB 变体）
+#包管理：ipk（Settings.sh 关闭 CONFIG_USE_APK），主题与 iStore 均为 .ipk
+name: MTK-TR3000-512M
+
+#CI计划（与 MTK-HY3000 保持一致）
+on:
+  #定时编译：每周一、周四 北京时间 04:00（UTC 周日/周三 20:00）
+  schedule:
+    - cron: '0 20 * * 0,3'
+  #手动编译
+  workflow_dispatch:
+    inputs:
+      PACKAGE:
+        description: '手动调整插件包，多个请用\n符号隔开。'
+        required: false
+        type: string
+      TEST:
+        description: '仅输出配置文件，不编译固件。'
+        default: false
+        required: false
+        type: boolean
+
+#CI权限
+permissions: write-all
+
+#CI任务
+jobs:
+  config:
+    name: TR3000-512M
+    strategy:
+      fail-fast: false
+      matrix:
+        CONFIG: [TR3000-512M-WIFI-YES]
+        SOURCE: [VIKINGYFY/immortalwrt]
+        BRANCH: [owrt]
+
+    #调用公用编译核心WRT-CORE.yml
+    uses: ./.github/workflows/WRT-CORE.yml
+    with:
+      #编译配置
+      WRT_CONFIG: ${{matrix.CONFIG}}
+      #默认主题（ipk 包：luci-theme-vantage）
+      WRT_THEME: vantage
+      #默认主机名
+      WRT_NAME: TR3000
+      #默认WIFI名称
+      WRT_SSID: TR3000
+      #默认WIFI密码
+      WRT_WORD: 12345678
+      #默认地址
+      WRT_IP: 192.168.10.1
+      #默认密码，仅作提示，修改无用
+      WRT_PW: 无
+      #源码链接
+      WRT_REPO: https://github.com/${{matrix.SOURCE}}.git
+      #源码分支
+      WRT_BRANCH: ${{matrix.BRANCH}}
+      #源码名称
+      WRT_SOURCE: ${{matrix.SOURCE}}
+      #插件调整
+      WRT_PACKAGE: ${{inputs.PACKAGE}}
+      #仅输出配置文件
+      WRT_TEST: ${{inputs.TEST || false}}

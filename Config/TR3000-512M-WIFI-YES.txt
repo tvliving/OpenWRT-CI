@@ -1,0 +1,17 @@
+#设备平台
+CONFIG_TARGET_mediatek=y
+CONFIG_TARGET_mediatek_filogic=y
+#设备：Cudy TR3000 512MB（硬改 512MB NAND，ubi 分区扩到 0x1FA40000）
+#源码树只有 128MB / 256MB 变体，512MB 设备块由 Scripts/TR3000-512M.sh 在编译时注入
+#（DTS 派生自 mt7981b-cudy-tr3000-v1.dts + filogic.mk 追加 cudy_tr3000-512mb-v1）
+CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cudy_tr3000-512mb-v1=y
+#稳定 WiFi 方案：mt76 驱动/固件全量选入（与 HY3000 / lede 同方案）
+CONFIG_PACKAGE_kmod-mt7915e=y
+CONFIG_PACKAGE_kmod-mt7981-firmware=y
+CONFIG_PACKAGE_mt7981-wo-firmware=y
+CONFIG_PACKAGE_wpad-openssl=y
+CONFIG_PACKAGE_wireless-regdb=y
+CONFIG_PACKAGE_iwinfo=y
+#USB3（TR3000 机身一个 USB3 口）+ 自动挂载
+CONFIG_PACKAGE_kmod-usb3=y
+CONFIG_PACKAGE_automount=y

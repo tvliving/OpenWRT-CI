@@ -265,6 +265,13 @@ jobs:
           $GITHUB_WORKSPACE/Scripts/Handles.sh
           $GITHUB_WORKSPACE/.github/scripts/prepare-i2c-tools.sh
 
+          #设备支持注入：源码树里没有的机型（HY3000 / TR3000-512M 等）
+          #在 feeds 装好、defconfig 之前注入 DTS + filogic.mk 设备块，否则
+          #Config/<机型>.txt 里的 CONFIG_TARGET_DEVICE_* 会被 defconfig 静默丢弃。
+          if [ -f "$GITHUB_WORKSPACE/Scripts/Device.sh" ]; then
+            bash "$GITHUB_WORKSPACE/Scripts/Device.sh"
+          fi
+
       - name: Custom Settings
         run: |
           cd ./wrt/
