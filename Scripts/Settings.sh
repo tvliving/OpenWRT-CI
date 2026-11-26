@@ -74,6 +74,14 @@ if [ -n "$WRT_PACKAGE" ]; then
 	echo -e "$WRT_PACKAGE" >> ./.config
 fi
 
+#内核 6.18：kmod-nft-bridge 与 kmod-nf-conntrack-bridge 都打包 nf_conntrack_bridge.ko，
+#GENERAL.txt 已显式选 kmod-nft-bridge；若源码同时提供 nf-conntrack-bridge 包，
+#关掉它，避免 firmware install 阶段 check_data_file_clashes 导致整包安装失败。
+if grep -q 'KernelPackage/nf-conntrack-bridge' ./package/kernel/linux/modules/netfilter.mk 2>/dev/null; then
+	echo "# CONFIG_PACKAGE_kmod-nf-conntrack-bridge is not set" >> ./.config
+	echo "kernel clash fix: disabled kmod-nf-conntrack-bridge (nf_conntrack_bridge.ko 由 kmod-nft-bridge 提供)"
+fi
+
 #高通平台调整
 DTS_PATH="./target/linux/qualcommax/dts/"
 if [[ "${WRT_TARGET^^}" == *"QUALCOMMAX"* ]]; then
