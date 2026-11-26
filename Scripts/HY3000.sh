@@ -24,6 +24,7 @@ test -s target/linux/mediatek/dts/mt7981b-philips-hy3000.dts \
 # 且 owrt 的 mt7981b.dtsi 不含 mmc0 引脚定义（owrt 自家 eMMC 机型都在设备 dts 里定义）
 sed -i 's/#include "mt7981.dtsi"/#include "mt7981b.dtsi"/' \
 	target/linux/mediatek/dts/mt7981b-philips-hy3000.dts
+if ! grep -q 'mmc0_pins_default' target/linux/mediatek/dts/mt7981b-philips-hy3000.dts; then
 cat >> target/linux/mediatek/dts/mt7981b-philips-hy3000.dts <<'EOF'
 
 &pio {
@@ -42,8 +43,10 @@ cat >> target/linux/mediatek/dts/mt7981b-philips-hy3000.dts <<'EOF'
 	};
 };
 EOF
+fi
 
-#2) filogic.mk 机型块（文件尾为纯 device define 区，直接 append）
+#2) filogic.mk 机型块（文件尾为纯 device define 区，直接 append；幂等）
+if ! grep -q 'Device/philips_hy3000' target/linux/mediatek/image/filogic.mk; then
 cat >> target/linux/mediatek/image/filogic.mk <<'EOF'
 
 define Device/philips_hy3000
@@ -62,14 +65,17 @@ define Device/philips_hy3000
 endef
 TARGET_DEVICES += philips_hy3000
 EOF
+fi
 
-#3) 02_network：lan1-3 + wan（与 qihoo,360t7 同组，锚点唯一）
-sed -i '/^\tqihoo,360t7|\\$/i\\tphilips,hy3000|\\' \
-	target/linux/mediatek/filogic/base-files/etc/board.d/02_network
+#3) 02_network：lan1-3 + wan（与 qihoo,360t7 同组，锚点唯一；已注入则跳过）
+grep -q 'philips,hy3000' target/linux/mediatek/filogic/base-files/etc/board.d/02_network \
+	|| sed -i '/^\tqihoo,360t7|\\$/i\\tphilips,hy3000|\\' \
+		target/linux/mediatek/filogic/base-files/etc/board.d/02_network
 
-#4) platform.sh：eMMC 升级（仅插入第一处主 case 的兜底 *) 之前）
-sed -i '0,/^\t\*)$/s//\tphilips,hy3000)\n\t\tCI_KERNPART="kernel"\n\t\tCI_ROOTPART="rootfs"\n\t\temmc_do_upgrade "$1"\n\t\t;;\n\t*)/' \
-	target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
+#4) platform.sh：eMMC 升级（插入第一处主 case 的兜底 *) 之前；已注入则跳过）
+grep -q 'philips,hy3000' target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh \
+	|| sed -i '0,/^\t\*)$/s//\tphilips,hy3000)\n\t\tCI_KERNPART="kernel"\n\t\tCI_ROOTPART="rootfs"\n\t\temmc_do_upgrade "$1"\n\t\t;;\n\t*)/' \
+		target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
 
 #5) 校验注入结果
 grep -q "philips_hy3000" target/linux/mediatek/image/filogic.mk || { echo "::error::filogic.mk 注入失败"; exit 1; }
