@@ -74,12 +74,34 @@ if [ -n "$WRT_PACKAGE" ]; then
 	echo -e "$WRT_PACKAGE" >> ./.config
 fi
 
-#内核 6.18：kmod-nft-bridge 与 kmod-nf-conntrack-bridge 都打包 nf_conntrack_bridge.ko，
-#GENERAL.txt 已显式选 kmod-nft-bridge；若源码同时提供 nf-conntrack-bridge 包，
-#关掉它，避免 firmware install 阶段 check_data_file_clashes 导致整包安装失败。
-if grep -q 'KernelPackage/nf-conntrack-bridge' ./package/kernel/linux/modules/netfilter.mk 2>/dev/null; then
-	echo "# CONFIG_PACKAGE_kmod-nf-conntrack-bridge is not set" >> ./.config
-	echo "kernel clash fix: disabled kmod-nf-conntrack-bridge (nf_conntrack_bridge.ko 由 kmod-nft-bridge 提供)"
+#内核 6.18 冲突：kmod-nft-bridge 的 FILES=$(NFT_BRIDGE-m) 会把
+#net/bridge/netfilter/nf_conntrack_bridge.ko 也打进去，而内核 default install 强制装
+#kmod-nf-conntrack-bridge（同一个 ko），firmware install 阶段 check_data_file_clashes 让
+#package/install Error 255。kmod-nf-conntrack-bridge 是内核自动带入、.config 关不掉，
+#所以改源码 netfilter.mk：nft-bridge 的 FILES/AUTOLOAD 只保留 nft_bridge.ko，
+#把重复的 conntrack_bridge.ko 剔除（该 ko 由 kmod-nf-conntrack-bridge 正常提供）。
+NFMK="./package/kernel/linux/modules/netfilter.mk"
+if grep -q 'KernelPackage/nf-conntrack-bridge' "$NFMK" 2>/dev/null && grep -q 'define KernelPackage/nft-bridge' "$NFMK" 2>/dev/null; then
+	python3 - "$NFMK" <<'PY'
+import io, sys, re
+p = sys.argv[1]
+s = io.open(p, encoding='utf-8').read()
+m = re.search(r'(define KernelPackage/nft-bridge\n.*?\nendef)', s, re.S)
+if not m:
+    print('kernel clash fix: nft-bridge define 未找到，跳过')
+    sys.exit(0)
+blk = m.group(1)
+new = re.sub(r'FILES:=\$\(foreach mod,\$\(NFT_BRIDGE-m\),\$\(LINUX_DIR\)/net/\$\(mod\)\.ko\)',
+             'FILES:=$(LINUX_DIR)/net/bridge/netfilter/nft_bridge.ko', blk)
+new = re.sub(r'AUTOLOAD:=\$\(call AutoProbe,\$\(notdir \$\(NFT_BRIDGE-m\)\)\)',
+             'AUTOLOAD:=$(call AutoProbe,nft_bridge)', new)
+if 'net/bridge/netfilter/nft_bridge.ko' in new:
+    s = s[:m.start()] + new + s[m.end():]
+    io.open(p, 'w', encoding='utf-8', newline='\n').write(s)
+    print('kernel clash fix: kmod-nft-bridge 只保留 nft_bridge.ko（剔除重复 conntrack_bridge.ko）')
+else:
+    print('kernel clash fix: FILES 格式不匹配，跳过')
+PY
 fi
 
 #高通平台调整
